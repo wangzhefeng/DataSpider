@@ -29,6 +29,5 @@ Spider projects, tools and learning scripts
   - XPath: lxml, xml
   - CSS selector: BeautifulSoup, pyquery
 * Frame
-  - 
   - Scrapy
 * Deploy
