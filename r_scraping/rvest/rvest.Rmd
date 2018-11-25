@@ -1,0 +1,29 @@
+---
+title: "rvest"
+author: "zfwang"
+date: "2016年5月23日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## **rvest + CSS Selector 网页数据抓取**
+
+```{r}
+library(rvest)
+library(magrittr)
+freak <- html_session("http://torrentfreak.com/top-10-most-pirated-movies-of-the-week-130304/")
+freak
+## Method 1
+ranking = freak %>% html_nodes("td:nth-child(1)") %>% html_text() %>% .[2:11]
+movie = freak %>% html_nodes("td:nth-child(3)") %>% html_text() %>% .[1:10]
+imdb_rating_trailer = freak %>% html_nodes("td:nth-child(4)") %>% html_text() %>% .[1:10]
+imdb_url = freak %>% html_nodes("td:nth-child(4) a[href*='imdb']") %>% html_attr("href") %>% .[1:10]
+data = data.frame(ranking, movie, imdb_rating_trailer, imdb_url,  stringsAsFactors = FALSE)
+data
+## Method 2
+data1 = freak %>% html_nodes("table") %>% html_table()
+data1
+```

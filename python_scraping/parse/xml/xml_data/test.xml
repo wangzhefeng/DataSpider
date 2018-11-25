@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="http://www.example.org/Ec/">
+	<SOAP-ENV:Body>
+		<ns1:callServiceResponse>
+			<response>{"ask":"Success","message":"","data":{"order_code":"G536-171225-0023","reference_no":"ZZZZPHCP2UM72379000","platform":"OTHER","order_status":"D","shipping_method":"DHL_SMALLPARCEL","tracking_no":"00340434192309327251","warehouse_code":"CZ","order_weight":"0.2200","order_desc":"","date_create":"2017-12-25 13:26:22","date_release":"2017-12-25 13:26:22","date_shipping":"2017-12-26 14:55:23","date_modify":"2017-12-26 14:56:09","consignee_country_code":"DE","consignee_country_name":"GERMANY","consignee_state":"","consignee_city":"Hechingen","consignee_district":null,"consignee_address1":"In den Malttwiesen","consignee_address2":"12","consignee_address3":null,"consigne_zipcode":"72379","consignee_doorplate":"","consignee_company":"","consignee_name":"Profil Maschinenbau GmbH","consignee_phone":"","consignee_email":"vagner39@web.de","age_detection":"0","fee_details":{"totalFee":"3.241","SHIPPING":"3.038","OPF":"0.203","FSC":"0.000","RSF":"0.000","DT":"0.000","OTF":"0.000"},"orderBoxInfo":[],"abnormal_problem_reason":"","items":[{"product_sku":"OT+XSQ+DE","quantity":"1"}]}}
+			</response>
+		</ns1:callServiceResponse>
+	</SOAP-ENV:Body>
+</SOAP-ENV:Envelope>

@@ -1,0 +1,243 @@
+---
+title: "RCurl"
+author: "zfwang"
+date: "April 14, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## **R语言爬虫之——RCurl**
+
+### **内容**
+
+* RCurl作者
+* RCurl概述
+* HTTP协议
+* RCurl三大函数
+    - getURL
+    - getForm
+    - postForm
+* getBinaryURL
+* XML
+
+
+### **1.RCurl作者**
+
+> Duncan Temple Lang ：现任加州大学 U.C. Davis分校副教授，致力于借助统计整合进行信息技术的探索
+
+### **2.RCurl概述**
+
+> RCurl这个程序包提供了由R到libcurl库的接口,从而实现HTTP的一些功能。例如,从服务器下载文件、保持连接、上传文件、采用二进制格式读取、句柄重定向、密码认证等等。
+
+> * 什么是curl&libcurl ? 
+>     - curl:利用URL语法在命令行方式下工作的开源文件传输工具 
+>     - curl背后的库就是libcurl
+> * 功能 :
+>     - 获得页面 
+>     - 有关认证 
+>     - 上传下载 
+>     - 信息搜索 
+>     -  ……
+    
+    
+### **3.HTTP协议**
+
+
+### **4.RCurl函数**
+
+* get请求函数(参数直接在URL中)
+  - getURL()
+    - get 请求的一般形式
+  - getBinaryURL()
+    - get请求的二进制资源
+  - getURLContent()
+    - get请求,可以根据返回状态的ContentType决定返回内容是文本格式还是二进制格式，所以说它其实就是前两个函数的结合体，可以根据返回内容类型做智能判断
+  - getURLAsynchronous()
+    - 可以实现请求的异步发送和多并发，需要计算机的cpu支持多和功能
+* get请求函数(参数可以写在单独的查询参数中)
+  - getForm()
+    - 单独提交查询参数的get请求函数
+  - getFormParams()
+    - 可以根据带参数的URL分解出原始参数对
+* 容错和配置句柄函数
+  - getCurlErrorClassNames()
+    - 排错函数，可以根据请求错误信息得到错误类型，方便后期排错
+  - getCurlHandle()
+    - curl句柄函数
+  - getCurlInfo()
+    - 根据curl句柄的记录信息返回各项目信息详情
+  
+  
+
+
+
+
+### **4.RCurl三大函数**
+
+```{r, message = FALSE}
+library(RCurl)
+```
+
+> * getURL() 
+> * getForm() 
+> * postForm()
+
+#### **(1)getURL()**
+
+```{r}
+url.exists(url = "www.baidu.com")        # 判断url是否存在
+d = debugGatherer()                      # 收集调试信息
+objects(d)
+d$value()
+tmp = getURL(url = "www.baidu.com", 
+             debugfunction = d$update, 
+             verbose = TRUE)             # verbose=TRUE 这时候，d$value()值是会叠加的
+names(d$value())
+cat(d$value()[1])                        # 服务器地址及端口号
+cat(d$value()[2])                        # 服务器返回的头信息
+cat(d$value()[3])                        # 提交给服务器的头信息
+d$reset()                                # 清除d$value()
+d$value()                                # 清除之后全部为空
+```
+
+```{r}
+# 查看服务器返回的头信息,列表形式
+h = basicHeaderGatherer()
+txt = getURL(url = "http://www.baidu.com", headerfunction = h$update)
+names(h$value())
+h$value()
+```
+
+
+```{r}
+# 查看服务器返回的头信息,字符串形式
+h = basicTextGatherer()
+txt = getURL(url = "http://www.baidu.com", headerfunction = h$update)
+names(h$value())                           # 说明是字符串形式，没有列
+h$value()                                  # 所有的内容只是一个字符串
+cat(h$value())                             # 用cat显示的，会比较好看
+```
+
+```{r}
+# 查看url请求的访问信息
+curl = getCurlHandle()
+
+txt = getURL(url="http://www.baidu.com", curl = curl)
+names(getCurlInfo(curl))
+getCurlInfo(curl)$response.code
+getCurlInfo(curl = curl)
+```
+
+
+```{r}
+# 设置自己的header，把系统设置成ihpone的系统Mac OS
+myheader = c(
+  "User-Agent"="Mozilla/5.0 (iPhone; U; CPU iPhone OS 4_0_1 like Mac OS X; ja-jp) 
+  AppleWebKit/532.9 (KHTML, like Gecko) Version/4.0.5 Mobile/8A306 
+  Safari/6531.22.7",
+  "Accept"="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language"="en-us",
+  "Connection"="keep-alive",
+  "Accept-Charset"="GB2312,utf-8;q=0.7,*;q=0.7")
+
+d = debugGatherer()
+tmp = getURL(url = "http://www.baidu.com", 
+             httpheader = myheader, 
+             debugfunction = d$update, 
+             verbose = TRUE)
+cat(d$value()[3])                         # 提交给服务器的头信息，发现设置成功
+```
+
+设置其他参数: 
+
+* verbose               输出访问的交互信息 
+* httpheader            设置访问信息报头 
+* .encoding=”UTF-8” “GBK” 
+* debugfunction, headerfunction, curl 
+* .params               提交的参数组 
+* dirlistonly           仅读目录，这个在ftp的网页，非常好用 
+* followlocation        支持重定向 
+* maxredirs             最大重定向次数
+
+```{r}
+# 设置其他参数，共174个参数
+listCurlOptions()
+```
+
+#### **(2)getForm()**
+
+```{r}
+# 在百度里面搜索“rcurl”的url为（浏览器为google chrome）：
+url = c("http://www.baidu.com/s?ie=utf-8&f=8&rsv_bp=1&rsv_idx=2&ch=&tn=SE_hldp02870_0v135xhf&bar=&w
+        d=rcurl&rsv_spt=1&rsv_pq=a3ed162a0088df8f&rsv_t=43d18gWNyd6HWpqDiKov7Dm548s4HY4cgcJlXc8ujpz
+        RW9Okec2aOb5screzftZo5DJ60Cp7aILvRK2Q&rsv_enter=1&inputT=2119")
+# wd=rcurl 这里就是关键字为rcurl
+
+getFormParams(query = url)                 # 查看url的结构和值
+names(getFormParams(query = url))
+
+tmp = getForm(uri = "http://www.baidu.com/s",
+              ie = "utf-8",
+              f = "8",
+              rsv_bp = "1",
+              rsv_idx = "2", 
+              ch = "",
+              tn = "SE_hldp02870_0v135xhf", 
+              bar = "", 
+              wd = "rcurl",
+              rsv_spt = "1",
+              rsv_pq = "a3ed162a0088df8f",
+              rsv_t="43d18gWNyd6HWpqDiKov7Dm548s4HY4cgcJlXc8ujpzRW9Okec2aO
+              b5screzftZo5DJ60Cp7aILvRK2Q", 
+              rsv_enter="1",
+              inputT="2119")
+# 爬取的页面为：
+tmp
+```
+
+
+#### **(3)postForm()**
+
+
+
+
+### **5.getBinaryURL()**
+
+```{r, eval=FALSE}
+# getBinaryURL() 下载一个文件
+url <- "http://rfunction.com/code/1201/120103.R"
+tmp <- getBinaryURL(url)
+note <- file("120103.R", open = "wb")
+writeBin(tmp, note)
+close(note)
+```
+
+```{r, eval=FALSE}
+# getBinaryURL() 批量下载文件
+url <- "http://rfunction.com/code/1202/"
+tmp <- RCurl::getURL(url, httpheader = myheader) # 获取网页
+
+tmp_files <- strsplit(x=tmp, split="<li><a href=\"")[[1]]
+tmp_files1 <- strsplit(tmp_files, split="\"")
+tmp_files2 <- lapply(X=tmp_files1, function(file) {file[1]})
+files <- unlist(tmp_files2)
+files <- files[c(-1, -2)]
+
+baseURL <- "http://rfunction.com/code/1202/"
+for(i in 1:length(files)){
+  fullURL <- paste(baseURL, files[i], sep = "")
+  tmp <- getBinaryURL(fullURL)
+  note <- file(paste("1202-", files[i], sep = ""), open = "wb")
+  writeBin(tmp, note)
+  close(note)
+
+  Sys.sleep(2) # 休眠2秒
+}
+```
+
+
+
+

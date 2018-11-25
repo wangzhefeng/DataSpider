@@ -1,0 +1,289 @@
+---
+title: "RCurl_XML"
+author: "wangzhefeng"
+date: "12/24/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 主要内容
+
+> 本文主要讲解用R进行爬虫的组合RCurl+XML+stringr
+
+* 数据检索的场景
+* 数据提取策略
+* 网络抓取
+
+## 必要的Packages
+
+```{r, message=F}
+if(!require(RCurl)) install.packages('RCurl')
+if(!require(XML)) install.packages('XML')
+if(!require(stringr)) install.packages('stringr')
+if(!require(plyr)) install.packages('plyr')
+```
+
+
+```{r, eval=F}
+setwd("/home/wangzhefeng/project/R/scraping/RCurl_XML/elec12_maryland")
+```
+
+
+## 1.下载现成的文件
+
+> TXT,CSV,PDF,XLS,JPEG的文本/表格(palin-text/spreadsheet)格式或二进制格式文件的直接下载
+
+## 1.1 CSV格式的选举结果数据
+
+#### 数据所在Web位置:
+
+[马里兰州选举委员会网站](http://www.elections.state.md.us/)提供了以往选举的丰富的数据源(.csv), [其中一个页面的子目录](http://www.elections.state.md.us/elections/2012/election_data/index.html)是一套用逗号分隔符的电子表格, 里面是有关2012年总统选举在马里兰的州、县、区以及的选举结果,目标文件可以通过一般的链接访问到.
+
+
+####　检索文件的步骤:
+
+
+* (1)找到想要文件的链接
+* (2)构建一个下载函数
+* (3)下载
+
+
+#### R代码实现
+
+* 主要函数
+    - XML::getHTMLLinks()
+    - download.file()
+
+
+```{r, eval=F}
+url = "http://www.elections.state.md.us/elections/2012/election_data/index.html"
+links = XML::getHTMLLinks(url)
+# links
+filenames = links[str_detect(links, "_General.csv")] 
+# filenames_link= paste0("http://www.elections.state.md.us/elections/2012/election_data/", filenames)
+
+filenames_list = as.list(filenames)
+filenames_list[1:3]
+```
+
+
+```{r, eval = F}
+downloadCSV = function(filename, baseurl, folder) {
+    dir.create(folder, showWarnings = FALSE)
+    file_url = str_c(baseurl, filename)
+    file_path = str_c(folder, "/", filename)
+    if(!file.exists(file_path)) {
+        download.file(file_url, destfile = file_path)
+        Sys.sleep(1)
+    }
+}
+```
+
+```{r, eval=F}
+l_ply(filenames_list, 
+      downloadCSV,
+      baseurl = "http://www.elections.state.md.us/elections/2012/election_data/",
+      folder = "/home/wangzhefeng/project/R/scraping/RCurl_XML/elec12_maryland")
+length(list.file("/home/wangzhefeng/project/R/scraping/RCurl_XML/elec12_maryland"))
+list.files("/home/wangzhefeng/project/R/scraping/RCurl_XML/elec12_maryland")[1:3]
+```
+
+
+## 1.2 PDF格式的立法选区图
+
+> `download.file()`没有提供从特定网站下载文件所需的功能, 尤其是它在默认情况下不支持通过HTTPS检索数据, 而且也不能处理cookie或其他很多HTTP的高级特性.
+> RCurl中的高级函数能够轻松处理这类问题.
+
+#### 数据所在Web位置:
+
+下载2012年马里兰州立法选区分布图的PDF文件，该分布图可以在[马里兰规划部的网站](http://planning.maryland.gov/Redistricting/2010/legiDist.shtml)上获取。
+
+
+#### R代码实现
+
+* 主要函数
+    - XML::getHTMLLinks()
+    - RCurl::getBinaryURL()
+    - RCurl::writeBin()
+    - stringr::str_detect()
+    - stringr::str_extract_all()
+    - str_c()
+    - file.exists()
+    - RCurl::getCurlHandle()
+    - Sys.sleep()
+    - R.version
+    - plyr::l_ply()
+    - list.files()
+    - dir.create()
+
+```{r, eval = F}
+url = "http://planning.maryland.gov/Redistricting/2010/legiDist.shtml"
+links = XML::getHTMLLinks(url)
+filenames = links[str_detect(links, "2010maps/Leg/Districts_")]
+filenames
+filenames_list = str_extract_all(filenames, "Districts.+pdf")
+filenames_list
+```
+
+
+```{r, eval = F}
+downloadPDF = function(filename, baseurl, folder, handle) {
+    dir.create(folder, showWarnings = FALSE)
+    file_url = str_c(baseurl, filename)
+    file_path = str_c(folder, "/", filename)
+    if(!file.exists(file_path)) {
+        content = getBinaryURL(file_url, curl = handle)
+        writeBin(content, file_path)
+        # print('download PDF file: ', filename)
+        Sys.sleep(1)
+    }
+}
+```
+
+```{r, eval = F}
+# R Version Message
+R.version
+# Handle，每次调用加一个User-Agent和From标头字段
+handle = getCurlHandle(useragent = str_c(R.version$platform, R.version$version.string, sep = ", "),
+                       httpheader = c(from = "eddie@datacollection.com"))
+l_ply(filenames_list, 
+      downloadPDF, 
+      baseurl = "planning.maryland.gov/PDF/Redistricting/2010maps/Leg/",
+      folder = "/home/wangzhefeng/project/R/scraping/RCurl_XML/elec12_maryland_maps",
+      handle = handle)
+length(list.files("/home/wangzhefeng/project/R/scraping/RCurl_XML/elec12_maryland_maps"))
+list.files("/home/wangzhefeng/project/R/scraping/RCurl_XML/elec12_maryland_maps")[1:3]
+```
+
+
+## 1.3 从FTP索引下载多个文件
+
+> 从FTP服务器下载文件对于数据搜集者来说是有益的工作, 因为FTP服务器只提供文件，没有其他内容，不必要花心思去掉HTML布局或其他不需要的信息.
+
+#### 数据所在Web位置:
+
+[CRAN FTP服务器](ftp://cran.r-project.org/)保存了很多关于R的数据，包括旧版本的R，CRAN任务试图和所有的CRAN组件. 现在想下载所有的CRAN任务试图的HTML文件，目的是更详细地查看它们，它们保存在[这里](ftp://cran.r-project.org/pub/R/web/views/).
+
+
+####　检索文件的步骤:
+
+* (1)找到想要文件的链接
+* (2)构建一个下载函数
+* (3)下载
+
+#### R代码实现
+
+* 主要函数
+    - RCurl::getURL()
+
+```{r, eval = F}
+ftp = "ftp://cran.r-project.org/pub/R/web/views/"
+ftp_files = RCurl::getURL(ftp, dirlistonly = TRUE)
+ftp_files
+filenames = str_split(ftp_files, "\r\n")[[1]]
+filenames_html = unlist(str_extract(filenames, ".+(.html)"))
+filenames_html[1:3]
+filenames_html = RCurl::getURL(ftp, customrequest = "NLST *.html")
+filenames_html = str_split(filenames_html, "\\\r\\\n")[[1]]
+```
+
+
+
+## 1.4 从HTML网页采集链接、列表和表格
+
+#### R代码实现
+
+* 主要函数
+    - readLines
+    - XML::htmlParse
+    - XML::getHTMLLinks: 从网页提取链接
+    - XML::getHTMLExternalFiles: 提取HTML中指向外部文件的链接
+    - XML::readHTMLList: 提取HTML列表元素
+    - XML::readHTMLTable: 提取HTML表格
+
+(1) getHTMLLinks(), getHTMLExternalFiles()
+
+```{r}
+library(XML)
+
+mac_url = "http://en.wikipedia.org/wiki/Machiavelli"
+mac_source = readLines(mac_url, encoding = "UTF-8")
+mac_parsed = XML::htmlParse(mac_source, encoding = "UTF-8")
+mac_node = mac_parsed["//p"][[1]]
+```
+
+```{r}
+# getHTMLLinks(mac_url)[1:3]
+getHTMLLinks(mac_source)[1:3]
+getHTMLLinks(mac_parsed)[1:3]
+getHTMLLinks(mac_node)[1:3]
+```
+
+```{r}
+getHTMLLinks(mac_source, xpQuery = "//a[@class='extiw']//@href")[1:3]
+```
+
+```{r}
+xpath = "//img[contains(@src, 'Machiavelli')]/@src"
+getHTMLExternalFiles(mac_source, xpQuery = xpath)[1:3]
+```
+
+(2) readHTMLList()
+
+
+```{r}
+readHTMLList(mac_source)[[10]][1:3]
+```
+
+(3) readHTMLTable()
+
+```{r}
+names(readHTMLTable(mac_source))
+readHTMLTable(mac_source)[[1]]
+```
+
+```{r, eval = F}
+readHTMLTable(mac_source, stringsAsFactors = F)[[1]][7:8, 1]
+readHTMLTable(mac_source, 
+              elFun = getHTMLLinks,
+              stringsAsFactor = F)[[1]][7, ]
+readHTMLTable(mac_source, 
+              elFun = getHTMLLinks,
+              stringsAsFactor = F)[[1]][7, ]
+```
+
+
+
+## 1.5 处理HTML表单
+
+```{r}
+library(RCurl)
+library(XML)
+library(stringr)
+library(plyr)
+
+info = debugGatherer()
+handle = RCurl::getCurlHandle(cookiejar = "",
+                              followlocation = TRUE,
+                              autoreferer = TRUE,
+                              debugfunc = info$update,
+                              verbose = TRUE,
+                              httpheader = list(
+                                  form = "eddie@r-datacollection.com",
+                                  'user-agent' = str_c(R.version$version.string, ", ", R.version$platform)
+                              ))
+xmlAttrsToDF = function(parsedHTML, xpath) {
+    x = xpathApply(parsedHTML, xpath, xmlAttrs)
+    x = lapply(x, function(x) as.data.frame(t(x)))
+    do.call(rbind.fill, x)
+}
+
+url = "http://wordnetweb.princeton.edu/perl/webwn"
+html_form = getURL(url, curl = handle)
+parsed_form = htmlParse(html_form)
+xmlAttrsToDF(parsed_form, "//form")
+```
+

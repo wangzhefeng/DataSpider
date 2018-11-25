@@ -1,0 +1,675 @@
+---
+title: "HTML XML JSON XPath HTTP"
+author: "zfwang"
+date: "2016年5月23日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+> 用R语言以规范和可靠的方式从网页上提取信息
+
+## **1. HTML**
+
+### **1.1 HTML**
+
+---------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------
+
+### **1.2 R语言解析HTML、提取信息:**
+
+解析HTML:
+
+1. 首先，查看网络上的内容并检查它对于后续分析是否有用；
+    - 通过浏览器准确地显示HTML内容
+2. 其次，把HTML文件导入R并从中提取信息
+    - 通过**R解析器**在编程环境里构造HTML网页的可用文件表征
+
+---------------------------------------------------------------------------------------------------------
+
+#### **1.2.1 解析简介**
+
+
+##### **1. 读取HTML文件**
+
+> 读取HTML文件的函数并不关心对HTML基础性的正式语法的理解，而只是识别HTML文件中包含的符号序列。
+
+* 读取HTMLR的函数：
+    - **readLines()**
+        - **readLines()**函数会把输入文件的每一行分别映射到一个字符向量的一个值里。它给该文档创建的是一个扁平化的表示法，这种形式对于从中提取信息的用处不大，因为该函数对不同的标签元素(名字、属性、值等)是不了解的，它产生的结果从任何意义上说都不能反映嵌套的标签所对应的文档内部层次关系。
+
+* Example:
+
+```{r}
+url <- "http://www.r-datacollection.com/materials/ch-2-html/fortunes.html"
+fortunes <- readLines(con = url)
+fortunes
+```
+
+##### **2. 解析HTML文件**
+
+> * 为了获得有用的HTML文件表征，需要运用一个能够理解标记结构特殊含义的程序，并在某个R的专用数据结构内部重建HTML文件隐含的层次结构。这种表示法被称为**文档对象模型(DOM)**。
+> * 从**HTML**到**DOM**的转化就是**DOM解析器**的任务。解析器属于一般类型的域相关程序，它会遍历HTML符号序列并在编程环境里的一个数据对象里重建文档的语义结构。
+
+
+* 解析HTMLR函数：
+    - **XML**包提供了一个和**libxml2**库的接口，这个库是用**C**语言编写的功能强大的解析库，能够应付很多与解析相关的问题。
+    - **htmlParse()**: 产生正确解析文档对象
+        - **htmlParse()**函数和其他**DOM**风格的解析器能够有效地执行：
+            - 1.**htmlParse()**首先会解析整个目标网页，并在一个C语言的树形数据结构里产生DOM
+            - 2.下一步，C语言层次的节点结构会被转化为R语言的一个对象，在R内部，R使用**列表**来表达节点的层次顺序。C语言和R语言之间的转化是由**处理器(hander)**函数管理的
+
+```{r}
+library(XML)
+```
+
+```{r}
+url <- "http://www.r-datacollection.com/materials/ch-2-html/fortunes.html"
+parsed_fortunes <- htmlParse(file = url)
+print(parsed_fortunes)
+class(parsed_fortunes)
+```
+
+---------------------------------------------------------------------------------------------------------
+
+#### **1.2.2 丢弃节点**
+
+> * 在解析HTML的工程中，丢弃网页中不需要的部分有助于消除内存不足的问题并加快提取速度
+> * 处理器函数会规范C语言层次节点结构到R语言之间的转化过程，而处理器为处理节点(如删除、添加、修改)提供了方便使用的方法
+> * 在处理器默认没有变化的情况下，所有节点会被映射到R列表结构
+> * **把处理器指定为带有命名的函数的一个列表，这里的命名对应某个节点名，而函数明确了对该节点的操作，当处理到某个符合特定名字的节点时，对应的函数就会执行**
+> * **通过XML组件，可以传递处理器函数对待定的XML元素进行操作，例如：操作指令、XML注释、CDATA或一般节点集**
+
+**DOM风格解析的通用处理器:**
+
+函数                        | 节点类型
+--------------------------- | -----------------------
+**startElement()**          | XML元素 
+**text()**                  | 文本节点
+**comment()**               | 注释节点
+**cdata()**                 | <CDATA>节点
+**processingInstruction()** | 操作指示
+**namespace()**             | XML命名空间
+**entity()**                | 实体引用
+
+
+* Example: 
+
+在HTML样本文件中删除`<body>`节点
+
+```{r}
+h1 <- list("body" = function(x) {NULL})
+parsed_fortunes <- htmlTreeParse(url, handlers = h1, asTree = TRUE)
+parsed_fortunes
+parsed_fortunes$children
+```
+
+* Example:
+
+删除文档中的注释和所有带有div或title名字的节点
+
+```{r}
+h2 <- list(
+    startElement = function(node, ...) {
+        name = xmlName(node)
+        if(name %in% c("div", "title")) {NULL}else {node}
+    }, 
+    comment = function(node) {NULL}
+)
+parsed_fortunes <- htmlTreeParse(file = url, handlers = h2, asTree = TRUE)
+parsed_fortunes
+parsed_fortunes$children
+```
+
+--------------------------------------------------------------------------------------------------------
+
+#### **1.2.3 在创建过程中提取信息**
+
+提取信息：
+
+* 解析过程后提取信息
+    - R语言解析器完整遍历C语言层次的节点集，在R数据结构中构建文档树，然后从中提取信息
+* 解析过程中提取信息
+    - 在解析过程中，处理器把特定的节点直接赋值给选择的R对象，能节省一次额外的遍历步骤
+
+
+* Example:
+
+提取封装在`<i>`标签里的斜体字信息
+
+```{r}
+# 把对应网页中<i>节点的处理器函数定义为闭包函数
+getItalics <- function() {
+    # 创建数据对象(局部容器变量)，存放全局环境的工作区里的信息
+    i_container = character() 
+    # 为<i>节点定义处理器函数
+    list(
+        "i" = function(node, ...) {
+            i_container <<- c(i_container, xmlValue(node))
+        }, 
+        # 返回前面产生的容器对象
+        returnI = function() i_container
+    )
+}
+h3 <- getItalics()
+invisible(htmlTreeParse(url, handlers = h3))
+h3$returnI()
+```
+
+---------------------------------------------------------------------------------------------------------
+
+#### **1.2.4 总结**
+
+---------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------
+
+## **2. XML & JSON**
+
+> * XML (eXtensible Markup Language, 可扩展标记语言)
+> * JSON (JavaScript Object Node) :
+
+### **2.1 XML**
+
+#### **2.1.1 XML**
+
+---------------------------------------------------------------------------------------------------------
+
+#### **2.1.2 R语言解析XML、提取信息**
+
+> * 解析XML的原因：对XML文件产生一个能保留原结构的表征，据此能够从这些文件中进行简单的信息提取
+> * **这里主要介绍XML**文件在**R**中：
+    - 如何查看XML？
+    - 如何导入XML？
+    - 如何访问XML？
+    - 如何把来自XML文档的信息转化为更便于进一步图形化或统计化分析的数据结构？
+
+
+##### **2.1.2.1 解析XML文件**
+
+解析XML:
+
+* 读取组成XML文件的符号序列，并从元素中创建层次化的C语言树形结构
+* 使用处理器将树形数据结构翻译为R语言的数据结构
+
+解析XML包和函数：
+
+* XML package
+    - **XML**包提供了一个和**libxml2**库的接口，这个库是用**C**语言编写的功能强大的解析库，能够应付很多与解析相关的问题。
+* **xmlTreeParse()**
+* **xmlParse()**
+    - **xmlNativeTreeParse()**
+    - **xmlInternalTreeParse()**
+* **xmlEventParse()**
+
+* Example:
+
+解析XML文件technology.xml，该文件中存放了三个技术公司的股票信息,例如：当天的收盘价、最低价、最高价、成交量：
+
+```{r}
+library(XML)
+parsed_stocks <- xmlParse(file = "http://www.r-datacollection.com/materials/ch-3-xml/stocks/technology.xml")
+parsed_stocks_root <- xmlRoot(parsed_stocks)
+parsed_stocks_df <- xmlToDataFrame(parsed_stocks_root)
+head(parsed_stocks_df)
+```
+
+要检查XML文档是否遵循了规范，可以通过设置`validate`参数为`TRUE`来引入**DOM**创建后的校验步骤，即用一个DTD校验XML的合法性：
+
+```{r, eval=FALSE}
+# 符合DTD规范的
+parsed_stocks <- xmlParse(file = "http://www.r-datacollection.com/materials/ch-3-xml/stocks/technology.xml", 
+                          validate = TRUE)
+```
+
+```{r, eval=FALSE}
+# 不符合DTD规范的
+stocks <- xmlParse(file = "http://www.r-datacollection.com/materials/ch-3-xml/stocks/technology-manip.xml",
+                   validate = TRUE)
+输出结果：
+No declaration for element document
+Error in xmlParse(file = "http://www.r-datacollection.com/materials/ch-3-xml/stocks/technology-manip.xml",  : 
+  XML document is invalid
+```
+
+在大部分数据抓取的情况下，校验文件是没有必要的，可以直接对他们进行原样处理。
+
+##### **2.1.2.2 对XML文档的基本操作**
+
+> XML文档解析之后，用`XML` package 的函数进行信息查找和提取
+
+* 简单XML文档
+    - xmlRoot()
+        - xmlName()
+        - xmlSize()
+* 复杂XML文档
+    - XPath
+
+* Example:
+
+
+```{r}
+bond <- xmlParse("http://www.r-datacollection.com/materials/ch-3-xml/bond.xml")
+class(bond)
+bond
+
+# 提取节点集
+root <- xmlRoot(bond) # 提取顶级节点
+root
+xmlName(root)         # 返回root元素的名字
+xmlSize(root)         # 返回root元素的子节点数
+
+# 在节点集中，基本的导航或子集操作在R中对普通列表的索引操作是类似的可以使用数字序号或名字作为索引来选择特定的节点
+root[[1]]
+root[["movie"]]
+root[[1]][[1]]
+root[["movie"]][["name"]]
+root[[1]][[1]][[1]]
+root[["movie"]][["name"]][[1]]
+
+# 单个方括号返回XMLInternalNodeList类的对象
+root["movie"]
+root[1]
+```
+
+解析其他基于XML的语言文档:
+
+```{r}
+xmlParse("http://www.r-datacollection.com/materials/ch-3-xml/rsscode.rss")
+```
+
+总结：
+
+* 通过上面的索引查找XML文件中的内容是相当复杂的、易于出错而且极不方便的。此外，这种方法没有利用解析的XML文档得核心特性--节点之间的关系。所以**查询语言XPath**是十分有用的工具。
+* 这里涉及的方法和规则也都适用于其他基于XML的语言，解析器并不关心文档的名字和结构，只要代码是合法就可以。
+
+##### **2.1.2.3 从XML获取数据框或列表**
+
+> 把整个XML对象转换为向量、数据框、列表等R数据结构
+
+函数：
+
+* **xmlSApply()**
+* **xmlValue()**
+* **xmlGetAttr()**
+* **xmlToDataFrame()**
+* **xmlToList()**
+
+* Example:
+
+单个向量的提取用`xmlSApply()`, 这个函数由`lapply()`和`sapply()`包裹的。该函数对一个XML节点进行操作，对其子节点调用任何给定的函数，并返回一个向量。通常该函数配合`xmlValue()`、`xmlGetAttr()`等提取元素或属性值：
+
+```{r}
+root
+```
+
+```{r}
+xmlSApply(root, xmlValue)
+xmlSApply(root[[1]], xmlValue)
+xmlSApply(root[[2]], xmlValue)
+xmlSApply(root[[3]], xmlValue)
+
+xmlSApply(root, xmlAttrs)
+xmlSApply(root, xmlGetAttr, "id")
+```
+
+只要XML文档在层次关系上是扁平的，即离根节点最远的亲属节点是其孙子节点或子节点，就能用`xmlToDataFrame()`很轻松的转换为数据框(例外：`<actor>`元素上没用)；用`xmlToList()`转换为列表：
+
+```{r}
+movie.df <- xmlToDataFrame(root)
+movie.df
+movie.list <- xmlToList(root)
+movie.list
+```
+
+
+
+
+##### **2.1.2.4 事件驱动的解析** 
+
+> * 在很多情况下，XML文件通常比HTML文件大得多，文件的大小会超过计算机的内存容量。这个问题在涉及数据流时更为严重，因为在这种情况下，XML数据是逐步抵达的。
+> * 在DOM风格的解析器处理和存放的方式中，解析器产生给定XML文件的两个副本：C语言级别节点集；R语言数据结构。所以不适用于XML文件比较大以及数据流的情况。
+> * 对于上面提到的情况可以通过采用**事件驱动的解析**或**SAX解析(Simple API for XML)**来解析XML文件。
+> * 事件驱动的解析和DOM风格解析的差别：事件驱动跳过了在C语言级别创建完整DOM的步骤。相反，事件驱动的解析器会顺序遍历XML文件，一旦发现了某个感兴趣的特定元素，就会触发一个实时的、用户自定义的对该事件的反应。这个步骤让事件驱动解析相对DOM风格解析器具有了一个巨大的优势，因为计算机内存永远不需要容纳整个文件。
+
+
+* Example:
+    - 提取**technology.xml**文件中有关Apple公司股票的每日收盘价及其日期；
+    - 用处理器函数描述如何处理感兴趣的节点，即创建一个**SAX解析器**；
+    - 用`xmlEventParse()`对**technology.xml**文件运行**SAX解析器**。
+
+```{r}
+branchFun <- function() {
+    container_date = numeric()
+    container_close = numeric()
+    "Apple" = function(node, ...) {
+        date = xmlValue(xmlChildren(node)[[c("date")]])
+        container_date <<- c(container_date, date)
+        close = xmlValue(xmlChildren(node)[[c("close")]])
+        container_close <<- c(container_close, close)
+        # print(c(close, date))
+        # Sys.sleep(0.5)
+    }
+    getContainer <- function() data.frame(date = container_date, 
+                                          close = container_close)
+    list(Apple = Apple, getStore = getContainer)
+}
+h5 <- branchFun()
+# 运行SAX解析器
+invisible(xmlEventParse(file = "http://www.r-datacollection.com/materials/ch-3-xml/stocks/technology.xml",
+                        branches = h5, 
+                        handlers = list()))
+apple.stock <- h5$getStore()
+head(apple.stock)
+```
+
+---------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------
+
+
+### **2.2 JXON**
+
+#### **2.1.1 JSON**
+
+---------------------------------------------------------------------------------------------------------
+
+#### **2.1.2 R语言解析JSON、提取信息**
+
+* **rjson**
+* **RJSONIO**
+    - fromJSON()
+    - toJSON()
+    - isValidJSON()
+* **jsonlite**
+    - fromJSON()
+    - toJSON()
+    
+##### **1. RJSONIO**
+
+
+```{r}
+library(RJSONIO)
+```
+
+
+* Example 1:
+
+
+检查文档是否包含了合法的JSON数据：
+
+```{r}
+isValidJSON("/home/wangzhefeng/project/R/scraping/materials/ch-3-xml/indy.json")
+```
+
+`fromJSON()`读取JSON格式的内容并将其转换为R对象：
+
+```{r}
+indy <- RJSONIO::fromJSON(content = "/home/wangzhefeng/project/R/scraping/materials/ch-3-xml/indy.json")
+class(indy)
+indy
+```
+
+对列表进行分解或分组，或把它强制转化为向量、数据框、或其他结构：当JSON或XML数据加载到R中的时候，用户经常要决定哪些信息子集是必要的并需要插入数据框中的。因此，对于从JSON/XML到R的数据格式转换工作，不可能有什么现成的通用函数。只能根据实际情况来创建子集的数据转换工具。
+
+
+method 1:
+
+```{r}
+library(stringr)
+# 把列表结构扁平化为一个字符串向量
+indy.vec <- unlist(indy, recursive = TRUE, use.names = TRUE)
+indy.vec[str_detect(names(indy.vec), "name")]
+```
+
+
+method 2:
+
+```{r}
+sapply(indy[[1]], "[[", "year")
+sapply(indy[[1]], "[[", "name")
+sapply(indy[[1]], "[[", "actors")          # 有问题的
+sapply(indy[[1]], "[[", "producers")
+sapply(indy[[1]], "[[", "budget")
+sapply(indy[[1]], "[[", "academy_award_ve")
+```
+
+method 3:
+
+```{r}
+library(plyr)
+indy.unlist <- sapply(indy[[1]], unlist)
+indy.df <- do.call("rbind.fill", 
+                   lapply(lapply(indy.unlist, t),
+                          data.frame, 
+                          stringsAsFactors = FALSE))
+names(indy.df)
+indy.df
+```
+
+
+* Example 2:
+
+```{r}
+peanuts.json <- RJSONIO::fromJSON("http://www.r-datacollection.com/materials/ch-3-xml/peanuts.json", 
+                                  nullValue = NA, 
+                                  simplify = FALSE)
+peanuts.df <- do.call("rbind", 
+                      lapply(peanuts.json, 
+                             data.frame, 
+                             stringsAsFactors = FALSE))
+peanuts.df
+
+# 把为R数据转化JSON
+peanuts.json <- RJSONIO::toJSON(peanuts.df, pretty = TRUE)
+file.output <- file("peanuts_out.json")
+writeLines(peanuts.json, file.output)
+close(file.output)
+```
+
+
+##### **2. jsonlite**
+
+```{r}
+library(jsonlite)
+```
+
+```{r}
+x <- '[1, 2, true, false]'
+jsonlite::fromJSON(x)
+
+x <- '["foo", true, false]'
+jsonlite::fromJSON(x)
+
+x <- '[1, "foo", null, false]'
+jsonlite::fromJSON(x)
+```
+
+```{r}
+(peanuts.json <- jsonlite::fromJSON("http://www.r-datacollection.com/materials/ch-3-xml/peanuts.json"))
+(indy <- jsonlite::fromJSON("/home/wangzhefeng/project/R/scraping/materials/ch-3-xml/indy.json"))
+indy.df <- indy$`indy movies`
+indy.df
+indy.df$name
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+## **3. XPath**
+
+
+**解析XML文件的XPath设置(XPath表达式):**
+
+> * `nodename` 选取此节点的所有子节点
+> * `/`        作为路径内部的分割符 
+> * `/:`       选择根节点 
+> * `//:`      表示选择任意位置的某个节点 
+> * `@:`       表示选择某个属性 
+> * `*`        表示匹配任何元素节点 
+> * `@*`       表示匹配任何属性值 
+> * `node()`   表示匹配任何类型的节点
+
+
+#### **1.1 Package**
+
+> Tools for Parsing and Generating XML Within R and S-Plus
+
+```{r}
+library(XML)
+```
+
+#### **1.2 网络数据形式**
+
+* 表格数据
+    - 这种数据可以通过在网页上复制粘贴到Excel中
+* 非表格数据
+    - 非结构化数据
+
+#### **1.3 Examples**
+
+```{r}
+library(RCurl)
+url <- "http://www.cbooo.cn/year?year=2015"
+
+#解析文件，需指定encoding为"UTF-8"，否则乱码
+url <- htmlParse(url, encoding="UTF-8")
+
+tables <- readHTMLTable(url)
+table <- tables[[1]]
+names(table) <- c("title",
+                  "type",
+                  "boxoffice",
+                  "meanprice", 
+                  "numofpeople",
+                  "nation",
+                  "date")
+head(table)
+```
+
+```{r, eval = FALSE}
+url = "http://data.earthquake.cn/datashare/datashare_more_quickdata_new.jsp" 
+url = "http://219.143.71.11/wdc4seis@bj/earthquakes/csn_quakes_p001.jsp"
+wp = getURL(url)
+doc = htmlParse(wp, asText = TRUE, encoding = "UTF-8")
+tables = readHTMLTable(doc, header = TRUE, which = 2)
+head(tables)
+```
+
+## **4. HTTP**
+
+> HTTP(HypterText Transfer Protocol) 超文本传输协议：网络客户端(浏览器,邮件客户端)和服务器(能对来自网络的请求进行响应的计算机)之间进行通信时最常用的协议;
+> 创建和发送HTTP请求以及处理服务器端返回的HTTP响应都是浏览器和邮件客户端自动进行处理的.
+
+
+### 4.1 HTTP基础
+
+#### 4.1.1 互联网协议族
+
+为用户交互而设计的程序、技术、标准、协议，一起被称为**互联网协议族(Internet Protocol Suite, IPS)**
+
+* 重要协议:
+    - 传输层协议
+        - TCP (Transmission Control Protocol, 传输控制协议)
+    - 因特网层协议
+        - IP (Internet Protocol, 因特网协议)
+    - TCP和IP在网络中主要负责计算机之间的可靠数据传输;
+    - 应用层协议(信息交换协议)
+        - HTTP (Hyper Text Transfer Protocol, 超文本传输协议)
+        - FTP (File Transfer Protocol, 文件传输协议)
+        - POP (Post Office Protocol, 邮局协议, 用于电子邮件获取)
+        - SMTP (Simple Mail Transfer Protocol, 简单邮件传输协议)
+        - IMAP (Internet Message Access Protocol 因特网消息访问协议, 用于电子邮件存储和获取)
+
+* 客户端——服务区交互过程:
+    - 当访问某个URL时，浏览器作为客户端首先询问DNS(Domain Name System, 域名系统)服务器，输入的URL中的域名部("http://" 与参数中间的部分)分对应的是哪个IP地址，当浏览器获取了从DNS响应的IP地址后，就通过TCP/IP建立与请求的HTTP服务器之间的连接，一旦连接建立，客户端和服务器就可以交换信息。
+    - 客户端和服务期之间可以通过交换HTTP(或者其他的信息交换协议)消息进行的，最基本的HTTP回话是由一个客户端请求和一个服务器响应组成的。
+
+
+#### 4.1.2 URL语法
+
+URL (Uniform Resource Locators, 统一资源定位符): 用于网站和其他网络内容的位置表示, URL并不是HTTP的一部分，但能让用户直观地通过HTTP和其他协议进行通信。
+
+* URL格式:
+
+```
+scheme://hostname:port/path?querystring#fragment
+```
+* `scheme`: 模式，定义了客户端/应用和服务器之间通信所采用的协议
+    - http
+    - https
+    - ftp
+    - mailto: 依赖于SMTP标准的
+    - file: 本地或网络存储中的文件
+* `hostname:port`: 主机名，提供了存放资源的服务器的名字，是服务器的唯一识别符
+* `path`: 用于确定被请求的资源在服务器上的位置
+* `querystring`: 查询字符串，形式为“name = value”，
+* `fragment`: 分隔符，是指向文档中的特定部分，分段符是被浏览器(客户端处理的)
+
+* URL编码规则
+    - URL是通过ASCII字符集传输的，而ASCII字符集被限定为128个字符的集合，所以不包含在集合里面的字符以及大部分特殊字符都需要转义，URL编码也被称为百分号编码，因为每个编码都是以%开头的，"+"是URL转义序列的特例，是空格的编码，它只有在查询部分是合法的，在其他部分，空格的合法URL编码是%20;
+    - 一份完整的URL编码清单可以在[这里](https://www.w3cschool.cn/htmltags/html-urlencode.html)可以找到;
+    - R基础函数`URLencode()`和`URLdecode()`可以编码或者解码URL里的字符;这两个函数在手工创建URL时会比较有用;
+
+```{r}
+t = "I'm Eddie! How are you & you? 1 + 1 = 2"
+(url = URLencode(t, reserved = TRUE))
+URLdecode(url)
+```
+
+#### 4.1.3 HTTP消息
+
+* HTTP消息，不管是客户端请求还是服务器响应的消息，都由三部分组成:
+    - 起始行(start line)
+    - 标头(headers)
+    - 正文(body)
+* 常见的HTTP请求方法：
+    - GET: 从服务器检索资源
+    - POST: 利用消息正文向服务器发送数据或文件，从服务器检索资源
+    - HEAD: 和GET工作原理类似，但服务器响应只有起始行和标头，没有正文
+    - PUT: 把消息的正文保存在服务器上
+    - DELETE: 从服务器上删除一个资源
+    - TRACE: 追踪消息到达服务器沿途的路径
+    - OPTIONS: 返回支持的HTTP方法清单
+    - CONNECT: 建立一个网络连接
+
+
+#### 4.1.4 请求方法
+
+* 最重要的两个HTTP方法是GET和POST, 这两个方法都是从服务器请求一个资源，但在正文的使用上是不同的:
+    - GET: 不会再请求的正文中发送任何内容;
+    - POST: 会使用正文来发送数据.
+* 如果对来自服务器的内容不感兴趣，可以使用HEAD方法；
+* 两个用于测试的方法为:OPTIONS和TRACE:
+    - OPTIONS: 请求服务器发回它支持的方法;
+    - TRACE: 获得该请求消息到服务器所经过的所有代理服务器的清单
+* 两个把文件上传到服务器和从服务器删除的方法: PUT和DELETE
+* 建立HTTP连接用于后续通信:CONNECT
+
+#### 4.1.5　HTTP状态码
+
+* 当服务器响应请求的时候，总会在相应的起始行发回一个状态码; 状态码的范围从100到599，遵循一个特定的模式:
+    - 开头的数字代表了状态分类:
+        - 1XX 信息
+        - 2XX 成功
+        - 3XX 重定向
+        - 4XX 客户端错误
+        - 5XX 服务器错误
+    - 常见的HTTP状态码可以[这里](https://www.w3cschool.cn/htmltags/html-httpmessages.html)在找到
+
+#### 4.1.6 HTTP标头字段
+
+
+## 4.2 HTTP高级特性
+
+

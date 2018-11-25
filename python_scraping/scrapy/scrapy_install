@@ -1,0 +1,42 @@
+# 安装依赖库
+$ sudo apt-get install build-essential python3-dev libssl-dev libffi-dev libxml2 libxml2-dev libxslt-dev zlib1g-dev
+
+# 安装scrapy
+$ pip install scrapy
+
+# 启动scrapy
+$ scrapy
+$ which scrapy
+
+# 生成项目
+$ cd project/
+$ scrapy startproject test_project
+$ cd test_project
+$ tree
+
+# 生成模板
+$ scrapy genspider baidu baidu.com
+$ ls
+$ cd test_project
+$ cd spiders
+$ cat baidu.py
+
+# 列出spider的生成模板
+$ scrapy genspider -l
+
+# 用crawl模板生成zhihu.py
+$ scrapy genspider -t crawl zhihu www.zhihu.com
+
+# 运行scrapy
+$ cd test_project
+$ scrapy crawl baidu
+$ scrapy check baidu
+
+
+# 列出所有spider
+scrapy list
+
+$ scrapy shell quotes.toscrape.com
+
+$ scrapy crawl quotes
+$ scrapy crawl quotes -o quotes.json

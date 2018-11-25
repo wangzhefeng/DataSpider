@@ -1,0 +1,94 @@
+---
+title: "Some Functions in scarping with R"
+author: "zfwang"
+date: "2016年5月23日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Function:
+
+- readlines
+
+
+
+
+
+## **1. readLines**
+
+### **readLines {base} : Read Text Lines from a Connection**
+
+* **函数用途:**
+    - **Read some or all text lines from a connection.**
+    
+* **函数及其参数:**
+
+```{r, eval=FALSE}
+readLines(con = stdin(),
+          n = -1L,
+          ok = TRUE, 
+          warn = TRUE,
+          encoding = "unknown",
+          skipNul = FALSE)
+```
+
+* **官方文档例子:**
+
+```{r, eval=FALSE}
+#-------------------------------------------------
+cat("TITLE extra line", "2 3 5 7", "", "11 13 17", 
+    file = "ex.data", 
+    sep = "\n")
+readLines("ex.data", n = -1)
+unlink("ex.data")            # tidy up
+
+#-------------------------------------------------
+## difference in blocking
+cat("123\nabc", file = "test1")
+readLines("test1")           # line with a warning
+
+#-------------------------------------------------
+con <- file("test1", "r", blocking = FALSE)
+readLines(con)               # empty
+cat(" def\n", file = "test1", append = TRUE)
+readLines(con) # gets both
+close(con)
+unlink("test1") # tidy up
+
+# read a 'Windows Unicode' file
+A <- readLines(con <- file("Unicode.txt", encoding = "UCS-2LE"))
+close(con)
+unique(Encoding(A)) # will most likely be UTF-8
+```
+
+
+
+### **Example 1**
+
+数据来源于凤凰资讯,由于数据隐藏在JS代码中,所以我们使用`readLines`读取,字符处理的方式获得数据.
+
+```{r, warning=FALSE}
+##获取数据
+raw = readLines("http://news.ifeng.com/mainland/special/ptxyy/", encoding = "UTF-8")
+#raw
+rawHospital = raw[123 : 238]
+# rawHospital
+
+## 数据整理
+extFun = function(x){
+    split = strsplit(x, "','")
+    out = strsplit(split[[1]][2], "<br/>")
+    return(out)
+}
+extFun(rawHospital[1])
+hosList = sapply(rawHospital, extFun)
+hospital = c()
+for(i in 1:length(hosList)) {
+    hospital = append(hospital, hosList[[i]])
+}
+hospital
+```
+

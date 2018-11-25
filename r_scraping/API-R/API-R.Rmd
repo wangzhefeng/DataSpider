@@ -1,0 +1,19 @@
+---
+title: "API-R"
+author: "wangzhefeng"
+date: "12/24/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 从API检索数据
+
+```{r, eval=F}
+feed_url = 'http://weather/yahooapis.com/forecastrss'
+feed = getForm(feed_url, .params = list())
+```
+
+
